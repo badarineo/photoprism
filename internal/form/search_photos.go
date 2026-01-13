@@ -46,7 +46,7 @@ type SearchPhotos struct {
 	Square      bool      `form:"square" notes:"Finds square pictures only (aspect ratio 1:1)"`
 	Archived    bool      `form:"archived" notes:"Finds archived content"`
 	Public      bool      `form:"public" notes:"Excludes private content"`
-	Private     bool      `form:"private" notes:"Finds private content"`
+	Private     bool      `form:"private" notes:"Finds private content only (except when public:true)"`
 	Review      bool      `form:"review" notes:"Finds content in review"`
 	Error       bool      `form:"error" notes:"Finds content with errors"`
 	Hidden      bool      `form:"hidden" notes:"Finds hidden content (broken or unsupported)"`
@@ -93,7 +93,7 @@ type SearchPhotos struct {
 	Updated     time.Time `form:"updated" example:"updated:\"2006-01-02T15:04:05Z\"" time_format:"2006-01-02T15:04:05Z07:00" notes:"Finds content updated at or after this time"`        // Pictures updated at or after this time
 	Edited      time.Time `form:"edited" example:"edited:\"2006-01-02T15:04:05Z\"" time_format:"2006-01-02T15:04:05Z07:00" notes:"Finds content edited at or after this time"`           // Pictures edited at or after this time
 	Taken       time.Time `form:"taken" time_format:"2006-01-02" notes:"Finds content created on the specified date"`                                                                    // Pictures taken on the specified date
-	Before      time.Time `form:"before" time_format:"2006-01-02" notes:"Finds content created on or before this date"`                                                                  // Pictures taken on or before this date"
+	Before      time.Time `form:"before" time_format:"2006-01-02" notes:"Finds content created before this date"`                                                                        // Pictures taken on or before this date"
 	After       time.Time `form:"after" time_format:"2006-01-02" notes:"Finds content created on or after this date"`                                                                    // Pictures taken on or after this date
 	Count       int       `form:"count" binding:"required" serialize:"-"`                                                                                                                // Result FILE limit
 	Offset      int       `form:"offset" serialize:"-"`                                                                                                                                  // Result FILE offset
@@ -103,14 +103,17 @@ type SearchPhotos struct {
 	Details     bool      `form:"-" serialize:"-"`                                                                                                                                       // Include additional information from details table
 }
 
+// GetQuery returns the current search query string.
 func (f *SearchPhotos) GetQuery() string {
 	return f.Query
 }
 
+// SetQuery stores the raw query string.
 func (f *SearchPhotos) SetQuery(q string) {
 	f.Query = q
 }
 
+// ParseQueryString deserializes the query string into form fields and applies aliases.
 func (f *SearchPhotos) ParseQueryString() error {
 	if err := ParseQueryString(f); err != nil {
 		return err
@@ -180,6 +183,7 @@ func (f *SearchPhotos) FindUidOnly() bool {
 	return f.UID != "" && f.Query == "" && f.Scope == "" && f.Filter == "" && f.Album == "" && f.Albums == ""
 }
 
+// NewSearchPhotos creates a SearchPhotos form with the provided query.
 func NewSearchPhotos(query string) SearchPhotos {
 	return SearchPhotos{Query: query}
 }

@@ -67,7 +67,6 @@ func TestAlbums(t *testing.T) {
 
 		assert.Equal(t, "Christmas 2030", result[0].AlbumTitle)
 	})
-
 	t.Run("SearchWithSlug", func(t *testing.T) {
 		query := form.NewAlbumSearch("slug:holiday")
 		query.Type = entity.AlbumManual
@@ -79,7 +78,6 @@ func TestAlbums(t *testing.T) {
 
 		assert.Equal(t, "Holiday 2030", result[0].AlbumTitle)
 	})
-
 	t.Run("SearchWithCountry", func(t *testing.T) {
 		query := form.NewAlbumSearch("country:ca")
 		result, err := Albums(query)
@@ -90,7 +88,6 @@ func TestAlbums(t *testing.T) {
 
 		assert.Equal(t, "April 1990", result[0].AlbumTitle)
 	})
-
 	t.Run("FavoritesTrue", func(t *testing.T) {
 		query := form.NewAlbumSearch("favorite:true")
 		query.Count = 100000
@@ -171,7 +168,7 @@ func TestAlbums(t *testing.T) {
 		assert.Equal(t, 1, len(result))
 		assert.Equal(t, "Empty Moment", result[0].AlbumTitle)
 	})
-	t.Run("SearchForYear/Month/Day", func(t *testing.T) {
+	t.Run("SearchForYearMonthDay", func(t *testing.T) {
 		f := form.SearchAlbums{
 			Year:   "2021",
 			Month:  "10",
@@ -206,7 +203,7 @@ func TestAlbums(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		assert.Equal(t, 2, len(result))
+		assert.Equal(t, 3, len(result))
 	})
 	t.Run("Folders", func(t *testing.T) {
 		query := form.NewAlbumSearch("19")
@@ -294,8 +291,8 @@ func TestAlbums(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		assert.Equal(t, "|Banana", result[0].AlbumTitle)
-		assert.Equal(t, "sale%", result[1].AlbumTitle)
+		assert.Equal(t, "sale%", result[0].AlbumTitle)
+		assert.Equal(t, "Yoga***", result[1].AlbumTitle)
 	})
 	t.Run("AlbumSortName", func(t *testing.T) {
 		f := form.SearchAlbums{
@@ -312,7 +309,7 @@ func TestAlbums(t *testing.T) {
 		}
 
 		assert.Equal(t, "%gold", result[0].AlbumTitle)
-		assert.Equal(t, "&IlikeFood", result[1].AlbumTitle)
+		assert.Equal(t, "'Family", result[1].AlbumTitle)
 	})
 	t.Run("SortByCount", func(t *testing.T) {
 		f := form.SearchAlbums{

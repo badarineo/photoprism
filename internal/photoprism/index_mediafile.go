@@ -10,6 +10,7 @@ import (
 	"github.com/jinzhu/gorm"
 
 	"github.com/photoprism/photoprism/internal/ai/classify"
+	"github.com/photoprism/photoprism/internal/ai/vision"
 	"github.com/photoprism/photoprism/internal/entity"
 	"github.com/photoprism/photoprism/internal/entity/query"
 	"github.com/photoprism/photoprism/internal/event"
@@ -23,12 +24,13 @@ import (
 	"github.com/photoprism/photoprism/pkg/txt/clip"
 )
 
-// MediaFile indexes a single media file.
+// MediaFile indexes a single media file on behalf of the default owner.
 func (ind *Index) MediaFile(m *MediaFile, o IndexOptions, originalName, photoUID string) (result IndexResult) {
 	return ind.UserMediaFile(m, o, originalName, photoUID, entity.OwnerUnknown)
 }
 
-// UserMediaFile indexes a single media file owned by a user.
+// UserMediaFile indexes a single media file for the provided owner, performing duplicate detection,
+// metadata extraction, and database updates before returning an IndexResult describing the outcome.
 func (ind *Index) UserMediaFile(m *MediaFile, o IndexOptions, originalName, photoUID, userUID string) (result IndexResult) {
 	if m == nil {
 		result.Status = IndexFailed
@@ -57,6 +59,7 @@ func (ind *Index) UserMediaFile(m *MediaFile, o IndexOptions, originalName, phot
 	photo := entity.NewUserPhoto(o.Stack, userUID)
 	metaData := meta.NewData()
 	labels := classify.Labels{}
+	isNSFW := false
 	stripSequence := Config().Settings().StackSequences() && o.Stack
 
 	fileRoot, fileBase, filePath, fileName := m.PathNameInfo(stripSequence)
@@ -133,7 +136,8 @@ func (ind *Index) UserMediaFile(m *MediaFile, o IndexOptions, originalName, phot
 	}
 
 	// Find existing photo if a photo uid was provided or file has not been indexed yet...
-	if !fileExists && photoUID != "" {
+	switch {
+	case !fileExists && photoUID != "":
 		// Find existing photo by UID.
 		photoQuery = entity.UnscopedDb().First(&photo, "photo_uid = ?", photoUID)
 
@@ -146,7 +150,7 @@ func (ind *Index) UserMediaFile(m *MediaFile, o IndexOptions, originalName, phot
 			result.Err = fmt.Errorf("index: failed indexing %s, unknown photo uid %s (%s)", logName, photoUID, photoQuery.Error)
 			return result
 		}
-	} else if !fileExists {
+	case !fileExists:
 		// Find existing photo by matching path and name.
 		if photoQuery = entity.UnscopedDb().First(&photo, "photo_path = ? AND photo_name = ?", filePath, fullBase); photoQuery.Error == nil || fileBase == fullBase || !o.Stack {
 			// Skip next query.
@@ -181,19 +185,20 @@ func (ind *Index) UserMediaFile(m *MediaFile, o IndexOptions, originalName, phot
 				}
 			}
 		}
-	} else if fileExists {
+	case fileExists:
 		// Find photo by the id or uid assigned to the file.
-		if file.PhotoID > 0 {
+		switch {
+		case file.PhotoID > 0:
 			photoQuery = entity.UnscopedDb().First(&photo, "id = ?", file.PhotoID)
-		} else if rnd.IsUID(file.PhotoUID, entity.PhotoUID) {
+		case rnd.IsUID(file.PhotoUID, entity.PhotoUID):
 			photoQuery = entity.UnscopedDb().First(&photo, "photo_uid = ?", file.PhotoUID)
-		} else {
+		default:
 			// Should never happen.
 			result.Status = IndexFailed
 			result.Err = fmt.Errorf("index: file %s has no photo id or uid assigned - you may have found a bug, please report", logName)
 			return result
 		}
-	} else {
+	default:
 		// Should never happen.
 		result.Status = IndexFailed
 		result.Err = fmt.Errorf("index: unexpectedly failed indexing %s - you may have found a bug, please report", logName)
@@ -212,13 +217,14 @@ func (ind *Index) UserMediaFile(m *MediaFile, o IndexOptions, originalName, phot
 		}
 
 		// Detect and report file changes.
-		if fileRenamed {
+		switch {
+		case fileRenamed:
 			fileChanged = true
 			log.Debugf("index: %s was renamed", clean.Log(m.BaseName()))
-		} else if file.Changed(fileSize, modTime) {
+		case file.Changed(fileSize, modTime):
 			fileChanged = true
 			log.Debugf("index: %s was modified (new size %d, old size %d, new timestamp %d, old timestamp %d)", clean.Log(m.BaseName()), fileSize, file.FileSize, modTime.Unix(), file.ModTime)
-		} else if file.Missing() {
+		case file.Missing():
 			fileChanged = true
 			log.Debugf("index: %s was missing", clean.Log(m.BaseName()))
 		}
@@ -340,7 +346,8 @@ func (ind *Index) UserMediaFile(m *MediaFile, o IndexOptions, originalName, phot
 		// New and non-primary files can be skipped when updating faces only.
 		result.Status = IndexSkipped
 		return result
-	} else if ind.findFaces && file.FilePrimary {
+	} else if o.DetectFaces && file.FilePrimary {
+		// Run face detection on primary files when enabled for this indexing run.
 		if markers := file.Markers(); markers != nil {
 			// Detect faces.
 			faces := ind.Faces(m, markers.DetectedFaceCount())
@@ -350,12 +357,8 @@ func (ind *Index) UserMediaFile(m *MediaFile, o IndexOptions, originalName, phot
 				file.AddFaces(faces)
 			}
 
-			// Any new markers?
-			if file.UnsavedMarkers() {
-				// Add matching labels.
-				extraLabels = append(extraLabels, file.Markers().Labels()...)
-			} else if o.FacesOnly {
-				// Skip when indexing faces only.
+			// Skip when indexing faces only and no new markers were found.
+			if !file.UnsavedMarkers() && o.FacesOnly {
 				result.Status = IndexSkipped
 				return result
 			}
@@ -583,13 +586,14 @@ func (ind *Index) UserMediaFile(m *MediaFile, o IndexOptions, originalName, phot
 		// If the media type is still set to "image" and has not been
 		// manually modified, then check and update it as needed.
 		if photo.HasMediaType(media.Image) {
-			if m.IsAnimatedImage() {
+			switch {
+			case m.IsAnimatedImage():
 				photo.SetMediaType(media.Animated, entity.SrcAuto)
-			} else if m.IsRaw() {
+			case m.IsRaw():
 				photo.SetMediaType(media.Raw, entity.SrcAuto)
-			} else if m.IsLive(photo.PhotoDuration) {
+			case m.IsLive(photo.PhotoDuration):
 				photo.SetMediaType(media.Live, entity.SrcAuto)
-			} else if m.IsVector() {
+			case m.IsVector():
 				photo.SetMediaType(media.Vector, entity.SrcAuto)
 			}
 		}
@@ -813,17 +817,24 @@ func (ind *Index) UserMediaFile(m *MediaFile, o IndexOptions, originalName, phot
 	if file.FilePrimary {
 		primaryFile = file
 
-		// Classify images with TensorFlow?
-		if ind.findLabels {
-			labels = ind.Labels(m, entity.SrcImage)
+		// Classify images with TensorFlow if the run enables automatic labels.
+		if o.GenerateLabels {
+			labels = m.GenerateLabels(entity.SrcAuto)
 
 			// Append labels from other sources such as face detection.
 			if len(extraLabels) > 0 {
 				labels = append(labels, extraLabels...)
 			}
 
-			if !photoExists && Config().Settings().Features.Private && Config().DetectNSFW() {
-				photo.PhotoPrivate = ind.IsNsfw(m)
+			isNSFW = labels.IsNSFW(vision.Config.Thresholds.GetNSFW())
+		}
+
+		// Decouple NSFW detection from label generation.
+		if !photoExists {
+			if isNSFW {
+				photo.PhotoPrivate = true
+			} else if o.DetectNsfw {
+				photo.PhotoPrivate = m.DetectNSFW()
 			}
 		}
 
@@ -966,18 +977,18 @@ func (ind *Index) UserMediaFile(m *MediaFile, o IndexOptions, originalName, phot
 			w = append(w, txt.FilenameKeywords(fileBase)...)
 		}
 
-		if photo.OriginalName == "" {
+		switch {
+		case photo.OriginalName == "":
 			// Do nothing.
-		} else if fs.IsGenerated(photo.OriginalName) {
+		case fs.IsGenerated(photo.OriginalName):
 			w = append(w, txt.FilenameKeywords(filepath.Dir(photo.OriginalName))...)
-		} else {
+		default:
 			w = append(w, txt.FilenameKeywords(photo.OriginalName)...)
 		}
 
 		w = append(w, txt.FilenameKeywords(filePath)...)
 		w = append(w, locKeywords...)
 		w = append(w, file.FileMainColor)
-		w = append(w, photoLabels.Keywords()...)
 
 		details.Keywords = strings.Join(txt.UniqueWords(w), ", ")
 
@@ -1066,14 +1077,17 @@ func (ind *Index) UserMediaFile(m *MediaFile, o IndexOptions, originalName, phot
 		// Do nothing.
 	} else if original, merged, err := photo.Merge(Config().Settings().StackMeta(), Config().Settings().StackUUID()); err != nil {
 		log.Errorf("index: %s in %s (merge)", err.Error(), logName)
-	} else if len(merged) == 1 && original.ID == photo.ID {
-		log.Infof("index: merged one existing photo with %s", logName)
-	} else if len(merged) > 1 && original.ID == photo.ID {
-		log.Infof("index: merged %d existing photos with %s", len(merged), logName)
-	} else if len(merged) > 0 && original.ID != photo.ID {
-		log.Infof("index: merged %s with existing photo id %d", logName, original.ID)
-		result.Status = IndexStacked
-		return result
+	} else {
+		switch {
+		case len(merged) == 1 && original.ID == photo.ID:
+			log.Infof("index: merged one existing photo with %s", logName)
+		case len(merged) > 1 && original.ID == photo.ID:
+			log.Infof("index: merged %d existing photos with %s", len(merged), logName)
+		case len(merged) > 0 && original.ID != photo.ID:
+			log.Infof("index: merged %s with existing photo id %d", logName, original.ID)
+			result.Status = IndexStacked
+			return result
+		}
 	}
 
 	// Create backup of picture metadata in sidecar YAML file.

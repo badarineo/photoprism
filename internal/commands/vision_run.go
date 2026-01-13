@@ -14,25 +14,23 @@ import (
 // VisionRunCommand configures the command name, flags, and action.
 var VisionRunCommand = &cli.Command{
 	Name:      "run",
-	Usage:     "Runs one or more computer vision models on a set of pictures, as specified by the search filter",
-	ArgsUsage: "[filter]",
+	Usage:     "Runs one or more computer vision models on a set of pictures that match the specified search filters",
+	ArgsUsage: "[filter]...",
 	Flags: []cli.Flag{
 		&cli.StringFlag{
 			Name:    "models",
 			Aliases: []string{"m"},
 			Usage:   "computer vision `MODELS` to run, e.g. caption, labels, or nsfw",
+			Value:   "caption",
 		},
-		&cli.StringFlag{
-			Name:    "source",
-			Aliases: []string{"s"},
-			Value:   entity.SrcImage,
-			Usage:   "custom data source `TYPE`, e.g. estimate, image, meta, or manual",
-		},
+		PicturesCountFlag(),
+		VisionSourceFlag(entity.SrcAuto),
 		&cli.BoolFlag{
 			Name:    "force",
 			Aliases: []string{"f"},
-			Usage:   "force existing data to be updated if the source priority is equal to or higher than the current one",
+			Usage:   "replaces existing data if the model supports it and the source priority is equal or higher",
 		},
+		DryRunFlag("preview the run without executing any models"),
 	},
 	Action: visionRunAction,
 }
@@ -42,11 +40,30 @@ func visionRunAction(ctx *cli.Context) error {
 	return CallWithDependencies(ctx, func(conf *config.Config) error {
 		worker := workers.NewVision(conf)
 		filter := strings.TrimSpace(strings.Join(ctx.Args().Slice(), " "))
+		source, err := sanitizeVisionSource(ctx.String("source"))
+
+		if err != nil {
+			return cli.Exit(err.Error(), 1)
+		}
+
+		models := vision.ParseModelTypes(ctx.String("models"))
+
+		if ctx.Bool("dry-run") {
+			modelList := strings.Join(models, ",")
+			if modelList == "" {
+				modelList = "(none)"
+			}
+			log.Infof("dry-run: vision run would execute models [%s] with filter=%q (count=%d, source=%s, force=%v)", modelList, filter, ctx.Int("count"), string(source), ctx.Bool("force"))
+			return nil
+		}
+
 		return worker.Start(
 			filter,
-			vision.ParseTypes(ctx.String("models")),
-			ctx.String("source"),
+			ctx.Int("count"),
+			models,
+			string(source),
 			ctx.Bool("force"),
+			vision.RunManual,
 		)
 	})
 }

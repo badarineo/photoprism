@@ -25,7 +25,7 @@ type SearchPhotosGeo struct {
 	Updated     time.Time `form:"updated" example:"updated:\"2006-01-02T15:04:05Z\"" time_format:"2006-01-02T15:04:05Z07:00" notes:"Finds content updated at or after this time"`
 	Edited      time.Time `form:"edited" example:"edited:\"2006-01-02T15:04:05Z\"" time_format:"2006-01-02T15:04:05Z07:00" notes:"Finds content edited at or after this time"`
 	Taken       time.Time `form:"taken" time_format:"2006-01-02" notes:"Finds content created on the specified date"`
-	Before      time.Time `form:"before" time_format:"2006-01-02" notes:"Finds content created on or before this date"`
+	Before      time.Time `form:"before" time_format:"2006-01-02" notes:"Finds content created before this date"`
 	After       time.Time `form:"after" time_format:"2006-01-02" notes:"Finds content created on or after this date"`
 	Favorite    string    `form:"favorite" example:"favorite:yes" notes:"Finds favorites only"`
 	Unsorted    bool      `form:"unsorted" notes:"Finds content that is not in an album"`
@@ -47,7 +47,7 @@ type SearchPhotosGeo struct {
 	Square      bool      `form:"square" notes:"Finds square pictures only (aspect ratio 1:1)"`
 	Archived    bool      `form:"archived" notes:"Finds archived content"`
 	Public      bool      `form:"public" notes:"Excludes private content"`
-	Private     bool      `form:"private" notes:"Finds private content"`
+	Private     bool      `form:"private" notes:"Finds private content only (except when public:true)"`
 	Review      bool      `form:"review" notes:"Finds content in review"`
 	Quality     int       `form:"quality" notes:"Minimum quality score (1-7)"`
 	Face        string    `form:"face" notes:"Find pictures with a specific face ID, you can also specify yes, no, new, or a face type"`
@@ -166,6 +166,7 @@ func (f *SearchPhotosGeo) FindUidOnly() bool {
 	return f.UID != "" && f.Query == "" && f.Scope == "" && f.Filter == "" && f.Album == "" && f.Albums == ""
 }
 
+// NewSearchPhotosGeo creates a SearchPhotosGeo form with the provided query.
 func NewSearchPhotosGeo(query string) SearchPhotosGeo {
 	return SearchPhotosGeo{Query: query}
 }

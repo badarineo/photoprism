@@ -64,7 +64,7 @@ func FlushCachedPhotoLabel(m *PhotoLabel) {
 	}
 }
 
-// CachePhotoLabels warms up the PhotoLabel cache.
+// CachePhotoLabels preloads the photo-label cache from the database to speed up lookups.
 func CachePhotoLabels() (err error) {
 	if !UsePhotoLabelsCache {
 		return nil
@@ -94,7 +94,7 @@ func CachePhotoLabels() (err error) {
 	return nil
 }
 
-// FindLabel find the matching label based on the name provided or an error if not found.
+// FindLabel resolves a label by name/slug, optionally consulting the in-memory cache before querying the database.
 func FindLabel(name string, cached bool) (*Label, error) {
 	if name == "" {
 		return &Label{}, errors.New("missing label name")
@@ -139,7 +139,7 @@ func FindLabel(name string, cached bool) (*Label, error) {
 	return result, nil
 }
 
-// FindPhotoLabel find a photo label assignment for the specified IDs.
+// FindPhotoLabel loads the photo-label join row for the given IDs, using the cache when enabled.
 func FindPhotoLabel(photoId, labelId uint, cached bool) (*PhotoLabel, error) {
 	if photoId == 0 {
 		return &PhotoLabel{}, errors.New("invalid photo id")
@@ -173,16 +173,16 @@ func FindPhotoLabel(photoId, labelId uint, cached bool) (*PhotoLabel, error) {
 	result := &PhotoLabel{}
 
 	if find := Db().First(result, "photo_id = ? AND label_id = ?", photoId, labelId); find.RecordNotFound() {
-		if UsePhotoLabelsCache {
+		if cached && UsePhotoLabelsCache {
 			photoLabelCache.Set(cacheKey, *result, labelCacheErrorExpiration)
 		}
 		return result, fmt.Errorf("photo-label not found")
 	} else if find.Error != nil {
-		if UsePhotoLabelsCache {
+		if cached && UsePhotoLabelsCache {
 			photoLabelCache.Set(cacheKey, *result, labelCacheErrorExpiration)
 		}
 		return result, find.Error
-	} else if UsePhotoLabelsCache {
+	} else if cached && UsePhotoLabelsCache {
 		photoLabelCache.SetDefault(cacheKey, *result)
 	}
 

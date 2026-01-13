@@ -9,7 +9,7 @@ type ReportSection struct {
 
 // see https://docs.photoprism.app/getting-started/config-options/#face-recognition
 var faceFlagsInfo = `!!! info ""
-    To [recognize faces](https://docs.photoprism.app/user-guide/organize/people/), PhotoPrism first extracts crops from your images using a [library](https://github.com/esimov/pigo) based on [pixel intensity comparisons](https://dl.photoprism.app/pdf/publications/20140820-Pixel_Intensity_Comparisons.pdf). These are then fed into TensorFlow to compute [512-dimensional vectors](https://dl.photoprism.app/pdf/publications/20150101-FaceNet.pdf) for characterization. In the final step, the [DBSCAN algorithm](https://en.wikipedia.org/wiki/DBSCAN) attempts to cluster these so-called face embeddings, so they can be matched to persons with just a few clicks. A reasonable range for the similarity distance between face embeddings is between 0.60 and 0.70, with a higher value being more aggressive and leading to larger clusters with more false positives. To cluster a smaller number of faces, you can reduce the core to 3 or 2 similar faces. It is **strongly recommended** that you run the "photoprism faces reset" command in a terminal to remove existing clusters and mappings after changing any of the clustering parameters, as otherwise inconsistencies may result in unexpected behavior or errors. 
+    A reasonable range for the similarity distance is between 0.60 and 0.85, with higher values resulting in more aggressive clustering and more false positives. To cluster a smaller number of faces, reduce the core to 3 or 2 similar faces. After changing any of the clustering parameters, it is **strongly recommended** that you run the "photoprism faces reset" command in a terminal to remove existing clusters and mappings, as otherwise inconsistencies may result in unexpected behavior or errors.
 
 We recommend that only advanced users change these parameters:`
 
@@ -25,6 +25,7 @@ var OptionsReportSections = []ReportSection{
 	{Start: "PHOTOPRISM_READONLY", Title: "Feature Flags"},
 	{Start: "PHOTOPRISM_DEFAULT_LOCALE", Title: "Customization"},
 	{Start: "PHOTOPRISM_SITE_URL", Title: "Site Information"},
+	{Start: "PHOTOPRISM_CLUSTER_DOMAIN", Title: "Cluster Configuration"},
 	{Start: "PHOTOPRISM_HTTPS_PROXY", Title: "Proxy Server"},
 	{Start: "PHOTOPRISM_DISABLE_TLS", Title: "Web Server"},
 	{Start: "PHOTOPRISM_DATABASE_DRIVER", Title: "Database Connection"},
@@ -33,7 +34,7 @@ var OptionsReportSections = []ReportSection{
 	{Start: "PHOTOPRISM_THUMB_LIBRARY", Title: "Preview Images"},
 	{Start: "PHOTOPRISM_JPEG_QUALITY", Title: "Image Quality"},
 	{Start: "PHOTOPRISM_VISION_YAML", Title: "Computer Vision"},
-	{Start: "PHOTOPRISM_FACE_SIZE", Title: "Face Recognition",
+	{Start: "PHOTOPRISM_FACE_ENGINE", Title: "Face Recognition",
 		Info: faceFlagsInfo},
 	{Start: "PHOTOPRISM_PID_FILENAME", Title: "Daemon Mode",
 		Info: "If you start the server as a *daemon* in the background, you can additionally specify a filename for the log and the process ID:"},
@@ -51,6 +52,7 @@ var YamlReportSections = []ReportSection{
 	{Start: "ReadOnly", Title: "Feature Flags"},
 	{Start: "DefaultLocale", Title: "Customization"},
 	{Start: "SiteUrl", Title: "Site Information"},
+	{Start: "ClusterDomain", Title: "Cluster Configuration"},
 	{Start: "HttpsProxy", Title: "Proxy Server"},
 	{Start: "DisableTLS", Title: "Web Server"},
 	{Start: "DatabaseDriver", Title: "Database Connection"},
@@ -59,6 +61,7 @@ var YamlReportSections = []ReportSection{
 	{Start: "ThumbLibrary", Title: "Preview Images"},
 	{Start: "JpegQuality", Title: "Image Quality"},
 	{Start: "VisionYaml", Title: "Computer Vision"},
+	{Start: "FaceEngine", Title: "Face Recognition"},
 	{Start: "PIDFilename", Title: "Daemon Mode",
 		Info: "If you start the server as a *daemon* in the background, you can additionally specify a filename for the log and the process ID:"},
 }

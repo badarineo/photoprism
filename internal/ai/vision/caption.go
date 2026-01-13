@@ -1,25 +1,30 @@
 package vision
 
 import (
+	"context"
 	"errors"
 
-	"github.com/photoprism/photoprism/internal/entity"
 	"github.com/photoprism/photoprism/pkg/media"
 )
 
-// CaptionPromptDefault is the default prompt used to generate captions.
-var CaptionPromptDefault = `Create an interesting caption that sounds natural and briefly describes the visual content in up to 3 sentences.` +
-	` Avoid text formatting, meta-language, and filler words.` +
-	` Do not start captions with phrases such as "This image", "The image", "This picture", "The picture", "A picture of", "Here are", or "There is".` +
-	` Instead, start describing the content by identifying the subjects, location, and any actions that might be performed.` +
-	` Use explicit language to describe the scene if necessary for a proper understanding.`
+var captionFunc = captionInternal
 
-// CaptionModelDefault specifies the default model used to generate captions,
-// see https://qwenlm.github.io/blog/qwen2.5-vl/ to learn more.
-var CaptionModelDefault = "qwen2.5vl"
+// SetCaptionFunc overrides the caption generator. Intended for tests.
+func SetCaptionFunc(fn func(Files, media.Src) (*CaptionResult, *Model, error)) {
+	if fn == nil {
+		captionFunc = captionInternal
+		return
+	}
 
-// Caption returns generated captions for the specified images.
-func Caption(images Files, mediaSrc media.Src) (result *CaptionResult, model *Model, err error) {
+	captionFunc = fn
+}
+
+// GenerateCaption returns generated captions for the specified images.
+func GenerateCaption(images Files, mediaSrc media.Src) (*CaptionResult, *Model, error) {
+	return captionFunc(images, mediaSrc)
+}
+
+func captionInternal(images Files, mediaSrc media.Src) (result *CaptionResult, model *Model, err error) {
 	// Return if there is no configuration or no image classification models are configured.
 	if Config == nil {
 		return result, model, errors.New("vision service is not configured")
@@ -29,32 +34,29 @@ func Caption(images Files, mediaSrc media.Src) (result *CaptionResult, model *Mo
 			var apiRequest *ApiRequest
 			var apiResponse *ApiResponse
 
-			if apiRequest, err = NewApiRequest(model.EndpointRequestFormat(), images, model.EndpointFileScheme()); err != nil {
+			if engine, ok := EngineFor(model.EndpointRequestFormat()); ok && engine.Builder != nil {
+				if apiRequest, err = engine.Builder.Build(context.Background(), model, images); err != nil {
+					return result, model, err
+				}
+			} else if apiRequest, err = NewApiRequest(model.EndpointRequestFormat(), images, model.EndpointFileScheme()); err != nil {
 				return result, model, err
 			}
 
-			switch model.Service.RequestFormat {
-			case ApiFormatOllama:
-				apiRequest.Model, _, _ = model.Model()
-			default:
-				_, apiRequest.Model, apiRequest.Version = model.Model()
+			if apiRequest.Model == "" {
+				apiRequest.Model, _, apiRequest.Version = model.GetModel()
 			}
 
-			if model.System != "" {
-				apiRequest.System = model.System
+			model.ApplyService(apiRequest)
+
+			apiRequest.System = model.GetSystemPrompt()
+			apiRequest.Prompt = model.GetPrompt()
+
+			if apiRequest.Options == nil {
+				apiRequest.Options = model.GetOptions()
 			}
 
-			if model.Prompt != "" {
-				apiRequest.Prompt = model.Prompt
-			} else {
-				apiRequest.Prompt = CaptionPromptDefault
-			}
-
-			// Log JSON request data in trace mode.
 			apiRequest.WriteLog()
 
-			// Todo: Refactor response handling to support different API response formats,
-			//       including those used by Ollama and OpenAI.
 			if apiResponse, err = PerformApiRequest(apiRequest, uri, method, model.EndpointKey()); err != nil {
 				return result, model, err
 			} else if apiResponse.Result.Caption == nil {
@@ -62,8 +64,8 @@ func Caption(images Files, mediaSrc media.Src) (result *CaptionResult, model *Mo
 			}
 
 			// Set image as the default caption source.
-			if apiResponse.Result.Caption.Text != "" && apiResponse.Result.Caption.Source == "" {
-				apiResponse.Result.Caption.Source = entity.SrcImage
+			if apiResponse.Result.Caption.Source == "" {
+				apiResponse.Result.Caption.Source = model.GetSource()
 			}
 
 			result = apiResponse.Result.Caption

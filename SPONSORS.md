@@ -24,6 +24,8 @@ You are [welcome to contact us](https://www.photoprism.app/contact) for change r
 
 [**Patrick Kvaksrud**](https://github.com/Kvaksrud) (October 2023)
 
+**Alexander Burke** (November 2023)
+
 [**Lars Kusch**](https://github.com/LarsK1) (December 2023)
 
 **Joseph Hobbs** (November 2024)
@@ -87,6 +89,8 @@ You are [welcome to contact us](https://www.photoprism.app/contact) for change r
 **Andreas Kjeldsberg Pihl** (Patreon, August 2023)
 
 [**Kevin "BentoFox" Gelking**](https://github.com/KevinGelking) (Patreon, December 2024)
+
+[**Philipp Marmet**](https://github.com/fujexo) (October 2025)
 
 ## Infrastructure Sponsors ##
 

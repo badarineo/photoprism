@@ -9,8 +9,24 @@ import (
 	"github.com/photoprism/photoprism/pkg/media"
 )
 
-// Nsfw checks the specified images for inappropriate content.
-func Nsfw(images Files, mediaSrc media.Src) (result []nsfw.Result, err error) {
+var nsfwFunc = nsfwInternal
+
+// SetNSFWFunc overrides the Vision NSFW detector. Intended for tests.
+func SetNSFWFunc(fn func(Files, media.Src) ([]nsfw.Result, error)) {
+	if fn == nil {
+		nsfwFunc = nsfwInternal
+		return
+	}
+
+	nsfwFunc = fn
+}
+
+// DetectNSFW checks images for inappropriate content and generates probability scores grouped by category.
+func DetectNSFW(images Files, mediaSrc media.Src) (result []nsfw.Result, err error) {
+	return nsfwFunc(images, mediaSrc)
+}
+
+func nsfwInternal(images Files, mediaSrc media.Src) (result []nsfw.Result, err error) {
 	// Return if no thumbnail filenames were given.
 	if len(images) == 0 {
 		return result, errors.New("at least one image required")
@@ -31,12 +47,11 @@ func Nsfw(images Files, mediaSrc media.Src) (result []nsfw.Result, err error) {
 				return result, err
 			}
 
-			switch model.Service.RequestFormat {
-			case ApiFormatOllama:
-				apiRequest.Model, _, _ = model.Model()
-			default:
-				_, apiRequest.Model, apiRequest.Version = model.Model()
+			if apiRequest.Model == "" {
+				apiRequest.Model, _, apiRequest.Version = model.GetModel()
 			}
+
+			model.ApplyService(apiRequest)
 
 			if model.System != "" {
 				apiRequest.System = model.System

@@ -8,8 +8,8 @@ import (
 	"github.com/photoprism/photoprism/internal/ai/vision"
 	"github.com/photoprism/photoprism/internal/auth/acl"
 	"github.com/photoprism/photoprism/internal/photoprism/get"
+	"github.com/photoprism/photoprism/pkg/http/header"
 	"github.com/photoprism/photoprism/pkg/media"
-	"github.com/photoprism/photoprism/pkg/media/http/header"
 )
 
 // PostVisionCaption returns a suitable caption for an image.
@@ -53,17 +53,18 @@ func PostVisionCaption(router *gin.RouterGroup) {
 		}
 
 		// Run inference to generate a caption.
-		result, model, err := vision.Caption(request.Images, media.SrcRemote)
+		result, model, err := vision.GenerateCaption(request.Images, media.SrcRemote)
 
-		if err != nil {
+		switch {
+		case err != nil:
 			log.Errorf("vision: %s (caption)", err)
 			c.JSON(http.StatusBadRequest, vision.NewApiError(request.GetId(), http.StatusBadRequest))
 			return
-		} else if model == nil {
+		case model == nil:
 			log.Errorf("vision: no model specified (caption)")
 			c.JSON(http.StatusInternalServerError, vision.NewApiError(request.GetId(), http.StatusInternalServerError))
 			return
-		} else if result == nil {
+		case result == nil:
 			log.Errorf("vision: no result (caption)")
 			c.JSON(http.StatusInternalServerError, vision.NewApiError(request.GetId(), http.StatusInternalServerError))
 			return

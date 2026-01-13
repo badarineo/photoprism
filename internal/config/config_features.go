@@ -6,7 +6,10 @@ import (
 	"github.com/photoprism/photoprism/internal/service/hub/places"
 )
 
+// Sponsor indicates whether sponsor or demo features are enabled.
 var Sponsor = Env(EnvDemo, EnvSponsor, EnvTest)
+
+// Features represents the current feature tier (community by default).
 var Features = Community
 
 // DisableFrontend checks if the web user interface routes should be disabled.
@@ -74,11 +77,7 @@ func (c *Config) DisableFaces() bool {
 
 // DisableClassification checks if image classification is disabled.
 func (c *Config) DisableClassification() bool {
-	if c.DisableTensorFlow() || c.options.DisableClassification {
-		return true
-	}
-
-	return false
+	return c.options.DisableClassification
 }
 
 // DisableFFmpeg checks if FFmpeg is disabled for video transcoding.
