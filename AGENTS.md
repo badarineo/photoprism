@@ -1,6 +1,6 @@
 # PhotoPrism® — Repository Guidelines
 
-**Last Updated:** December 8, 2025
+**Last Updated:** February 14, 2026
 
 ## Purpose
 
@@ -29,12 +29,19 @@ This file tells automated coding agents (and humans) where to find the single so
   - Testing Guides: `specs/dev/backend-testing.md` (Backend/Go), `specs/dev/frontend-testing.md` (Frontend/JS)
   - Whenever the Change Management instructions for a document require it, publish changes as a new file with an incremented version suffix (e.g., `*-v3.md`) rather than overwriting the original file.
   - Older spec versions remain in the repo for historical reference but are not linked from the main TOC. Do not base new work on superseded files (e.g., `*-v1.md` when `*-v2.md` exists).
-  - Auto-generated configuration and command references live under `specs/generated/`. Agents MUST NOT read, analyse, or modify anything in this directory; refer humans to `specs/generated/README.md` if regeneration is required.
+  - Auto-generated configuration and command references live under `specs/generated/`. Agents MUST NOT read, analyze, or modify anything in this directory; refer humans to `specs/generated/README.md` if regeneration is required.
 - Regenerate `NOTICE` files with `make notice` when dependencies change (e.g., updates to `go.mod`, `go.sum`, `package-lock.json`, or other lockfiles). Do not edit `NOTICE` or `frontend/NOTICE` manually.
 - When writing CLI examples or scripts, place option flags before positional arguments unless the command requires a different order.
 - Use RFC 3339 UTC timestamps in request and response examples, and valid ID, UID and UUID examples in docs and tests.
+- Document headings must use **Title Case** (in APA or AP style) across Markdown files to keep generated navigation and changelogs consistent. Always spell the product name as `PhotoPrism`; this proper noun is an exception to generic naming rules.
 
-> Document headings must use **Title Case** (in APA or AP style) across Markdown files to keep generated navigation and changelogs consistent. Always spell the product name as `PhotoPrism`; this proper noun is an exception to generic naming rules.
+> Title Case rules (APA/AP implementation):
+> - Capitalize the first word of a title/heading and the first word of a subtitle.
+> - Capitalize the first word after a colon, an em dash, or end punctuation.
+> - Capitalize major words, including the second part of hyphenated major words.
+> - Capitalize all words of four letters or more.
+> - Lowercase only minor words of three letters or fewer (articles, short conjunctions, short prepositions), except when they are in one of the positions above.
+> - In headings, prefer `&` where needed; do not use `And` or `Or` in titles.
 
 > Refresh the `**Last Updated:**` date at the top of documents whenever you make changes to their contents, using the format `January 20, 2026` (without time); leave it as-is for simple formatting or whitespace-only edits.
 
@@ -62,8 +69,8 @@ This file tells automated coding agents (and humans) where to find the single so
 ### Web Templates & Shared Assets
 
 - HTML entrypoints live under `assets/templates/`; key files are `index.gohtml`, `app.gohtml`, `app.js.gohtml`, and `splash.gohtml`. The browser check logic resides in `assets/static/js/browser-check.js` and is included via `app.js.gohtml`; it performs capability checks (Promise, fetch, AbortController, `script.noModule`, etc.) before the main bundle executes.
-- To preserve the fallback messaging, keep the `<script>` order in `app.js.gohtml` so `browser-check.js` loads before `{{ .config.JsUri }}`. Do not add `defer` or `async` to the bundle tag unless you reintroduce a guarded loader.
-- The same loader partial is reused in private packages (`pro/assets/templates/index.gohtml`, `plus/assets/templates/index.gohtml`). Whenever you touch `app.js.gohtml` or change how we load the bundle, mirror the update by running commands such as `cd pro && sed -n '1,160p' assets/templates/index.gohtml` (and similarly for `plus`) to confirm they include the shared partial instead of hard-coding `<script src="{{ .config.JsUri }}">`.
+- To preserve the fallback messaging, keep the script order in `app.js.gohtml` so `browser-check.js` loads before the bundle script (`{{ .config.JsUri }}`). Do not add `defer` or `async` to the bundle tag unless you reintroduce a guarded loader.
+- The same loader partial is reused in private packages (`pro/assets/templates/index.gohtml`, `plus/assets/templates/index.gohtml`). Whenever you touch `app.js.gohtml` or change how we load the bundle, mirror the update by running commands such as `cd pro && sed -n '1,160p' assets/templates/index.gohtml` (and similarly for `plus`) to confirm they include the shared partial instead of hard-coding the bundle tag.
 - Splash styles are defined in `frontend/src/css/splash.css`. Add new splash elements (for example `.splash-warning`) there so both public and private editions remain visually consistent.
 - Browser baseline: PhotoPrism requires Safari 13 / iOS 13 or current Chrome, Edge, or Firefox. Update the message in `assets/templates/app.js.gohtml` (and the matching CSS) if support changes.
 
@@ -177,6 +184,7 @@ Note: Across our public documentation, official images, and in production, the c
 - Frontend unit tests use **Vitest**; see scripts in `frontend/package.json`.
   - Vitest watch/coverage: `make vitest-watch` and `make vitest-coverage`
 - Acceptance tests: use the `acceptance-*` targets in the `Makefile`
+- Portal proxy prefix validation: use the Portal test environment with `NODES=2` and verify both tenant routes when changing `PHOTOPRISM_PORTAL_PROXY_PREFIX` (Portal) and matching node `PHOTOPRISM_SITE_URL` prefixes; use `PORTAL_TEST_ENV_ARGS=--proxy-prefix=/tenant/` to regenerate consistent `.env` values.
 
 ### Playwright MCP Usage
 
@@ -320,6 +328,7 @@ Note: Across our public documentation, official images, and in production, the c
 - `PhotoFixtures.Get()` and similar helpers return value copies; when a test needs the database-backed row (with associations preloaded), re-query by UID/ID using helpers like `entity.FindPhoto(fixture)` so updates observe persisted IDs and in-memory caches stay coherent.
 - For slimmer tests that only need config objects, prefer the new helpers in `internal/config/test.go`: `NewMinimalTestConfig(t.TempDir())` when no database is needed, or `NewMinimalTestConfigWithDb("<pkg>", t.TempDir())` to spin up an isolated SQLite schema without seeding all fixtures.
 - When you need illustrative credentials (join tokens, client IDs/secrets, etc.), reuse the shared `Example*` constants (see `internal/service/cluster/examples.go`) so tests, docs, and examples stay consistent.
+- Hidden error UI checks for `/library/hidden` require both `files.file_error` and `photos.photo_quality = -1`; hidden searches are quality-gated, so setting only `file_error` will not surface the row in Hidden results.
 
 ### Roles & ACL
 
@@ -334,6 +343,7 @@ Note: Across our public documentation, official images, and in production, the c
 - ImportWorker may skip files if an identical file already exists (duplicate detection). Use unique copies or assert DB rows after ensuring a non‑duplicate destination.
 - Mixed roots: when testing related files, keep `ExamplesPath()/ImportPath()/OriginalsPath()` consistent so `RelatedFiles` and `AllowExt` behave as expected.
 - `IndexOptions*` helpers now require a `*config.Config`; pass the active config (or `config.NewMinimalTestConfig(t.TempDir())` in unit tests) so face/label/NSFW scheduling matches the current run.
+- Folder albums use path-first lookup/update (`album_path`) to avoid slug collisions for emoji child paths; re-indexing can repair stale collision titles when a child folder incorrectly shows the parent name, while preserving user-custom titles.
 
 ### CLI Usage & Assertions
 
@@ -422,7 +432,7 @@ Note: Across our public documentation, official images, and in production, the c
   token := s.AuthToken()
   r := AuthenticatedRequest(app, http.MethodGet, "/api/v1/cluster/nodes", token)
   ```
-  Admins see `AdvertiseUrl` and `Database`; client/user sessions don’t. `SiteUrl` is safe to show to all roles.
+  Admins see `AdvertiseUrl` and `Database`; client/user sessions don’t. `SiteUrl` is safe to show to all roles. Client config also includes `storageNamespace` (SHA-256 of `SiteUrl`) for browser storage scoping and is safe to expose.
 
 ### Preflight Checklist
 
